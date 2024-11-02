@@ -122,25 +122,20 @@ async def play(interaction: discord.Interaction, url: str):
     await interaction.response.send_message(f'Added to queue: {url}')
 
     # Play if not already playing
-    if not voice_client.is_playing() and len(bot.song_queue) > 0:
+    if not voice_client.is_playing() and not voice_client.is_paused():
         await play_next(voice_client)
-
-    # Start the inactivity check if it's not already running
-    if bot.activity_check_task is None:
-        bot.activity_check_task = bot.loop.create_task(bot.check_inactivity(voice_client))
 
 async def play_next(voice_client):
     if len(bot.song_queue) > 0:
         url = bot.song_queue.popleft()  # Get the next song from the queue
         player = await YTDLSource.from_url(url, loop=bot.loop)
-        if player is None:
-            print("Failed to load player, trying next song.")
-            await play_next(voice_client)
-            return
+        
+        # Use play() method to start playback immediately
         voice_client.play(player, after=lambda e: bot.loop.create_task(play_next(voice_client)))
         print(f'Now playing: **{player.data["title"]}**')
     else:
         await voice_client.disconnect()  # Disconnect if the queue is empty
+
 
 @bot.tree.command(name="stop", description="Stop the music")
 async def stop(interaction: discord.Interaction):
