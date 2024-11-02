@@ -126,9 +126,10 @@ async def play(interaction: discord.Interaction, url: str):
     bot.song_queue.append(url)
     await interaction.followup.send(f'Added to queue: {url}')
 
-    # Play if not already playing
+    # If the bot is not playing, start playing immediately
     if not voice_client.is_playing() and not voice_client.is_paused():
         await play_next(voice_client)
+
 
 async def play_next(voice_client):
     if len(bot.song_queue) > 0:
