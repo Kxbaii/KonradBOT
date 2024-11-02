@@ -17,12 +17,13 @@ VIDEOS_FOLDER = os.path.join(os.path.dirname(__file__), 'videos')
 ytdl_format_options = {
     'format': 'bestaudio/best',
     'postprocessors': [{
-        'key': 'ffmpeg.extractaudio',
+        'key': 'FFmpegExtractAudio',  
         'preferredcodec': 'mp3',
         'preferredquality': '192',
     }],
     'noplaylist': True,
 }
+
 
 ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
 
