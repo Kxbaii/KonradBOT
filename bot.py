@@ -102,11 +102,13 @@ async def play(interaction: discord.Interaction, url: str):
     if not interaction.user.voice:
         return await interaction.response.send_message("You need to be in a voice channel to play music.")
 
-    # Check if the bot is already in a voice channel
+    # Get the current voice client
     voice_client = interaction.guild.voice_client
+
+    # Check if the bot is already in a voice channel
     if voice_client is None:
         channel = interaction.user.voice.channel
-        await channel.connect()
+        voice_client = await channel.connect()
 
     # Add the song to the queue
     bot.song_queue.append(url)
