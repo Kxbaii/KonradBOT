@@ -2,6 +2,7 @@ import discord
 import random
 import os
 import yt_dlp as youtube_dl
+import asyncio
 from collections import deque
 from discord import app_commands
 
@@ -32,12 +33,16 @@ class YTDLSource(discord.PCMVolumeTransformer):
 
     @classmethod
     async def from_url(cls, url, *, loop=None, volume=0.5):
-        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=False))
-        if 'entries' in data:
-            data = data['entries'][0]
-        filename = data['url']
-        source = discord.FFmpegPCMAudio(filename)
-        return cls(source, data=data, volume=volume)
+        try:
+            data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=False))
+            if 'entries' in data:
+                data = data['entries'][0]
+            filename = data['url']
+            source = discord.FFmpegPCMAudio(filename)
+            return cls(source, data=data, volume=volume)
+        except Exception as e:
+            print(f"Error extracting info: {e}")
+            return None
 
 # Bot class
 class MyBot(discord.Client):
@@ -58,6 +63,7 @@ class MyBot(discord.Client):
         await asyncio.sleep(600)  # Wait for 10 minutes
         if not voice_client.is_playing():
             await voice_client.disconnect()
+            self.activity_check_task = None  # Clear the task after disconnecting
 
 # Initialize bot
 bot = MyBot()
@@ -92,6 +98,7 @@ async def leave(interaction: discord.Interaction):
     if interaction.guild.voice_client:
         await interaction.guild.voice_client.disconnect()
         bot.song_queue.clear()  # Clear the queue on leave
+        bot.activity_check_task = None  # Clear the task
         await interaction.response.send_message("Disconnected from the voice channel.")
     else:
         await interaction.response.send_message("I'm not in a voice channel.")
@@ -115,7 +122,7 @@ async def play(interaction: discord.Interaction, url: str):
     await interaction.response.send_message(f'Added to queue: {url}')
 
     # Play if not already playing
-    if not voice_client.is_playing():
+    if not voice_client.is_playing() and len(bot.song_queue) > 0:
         await play_next(voice_client)
 
     # Start the inactivity check if it's not already running
@@ -126,6 +133,10 @@ async def play_next(voice_client):
     if len(bot.song_queue) > 0:
         url = bot.song_queue.popleft()  # Get the next song from the queue
         player = await YTDLSource.from_url(url, loop=bot.loop)
+        if player is None:
+            print("Failed to load player, trying next song.")
+            await play_next(voice_client)
+            return
         voice_client.play(player, after=lambda e: bot.loop.create_task(play_next(voice_client)))
         print(f'Now playing: **{player.data["title"]}**')
     else:
