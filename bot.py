@@ -52,6 +52,9 @@ bot = MyBot()
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user}')
+    await bot.tree.sync()  # Synchronize commands with Discord
+    print("Commands synchronized!")
+
 
 # Command: /zdjecie
 @bot.tree.command(name="zdjecie", description="Send a random image")
