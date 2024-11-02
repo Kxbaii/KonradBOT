@@ -4,7 +4,7 @@ import os
 from discord import app_commands
 
 # Token
-TOKEN = ''
+TOKEN = os.getenv('TOKEN')
 
 # Set folder paths
 IMAGES_FOLDER = os.path.join(os.path.dirname(__file__), 'images')
