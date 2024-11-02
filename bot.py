@@ -52,18 +52,11 @@ class MyBot(discord.Client):
         super().__init__(intents=intents)
         self.tree = app_commands.CommandTree(self)  # Initialize the command tree correctly
         self.song_queue = deque()  # Initialize the song queue
-        self.activity_check_task = None  # Task for checking inactivity
 
     async def on_ready(self):
         print(f'Logged in as {self.user}')
         await self.tree.sync()  # Synchronize commands with Discord
         print("Commands synchronized!")
-
-    async def check_inactivity(self, voice_client):
-        await asyncio.sleep(600)  # Wait for 10 minutes
-        if not voice_client.is_playing():
-            await voice_client.disconnect()
-            self.activity_check_task = None  # Clear the task after disconnecting
 
 # Initialize bot
 bot = MyBot()
@@ -98,7 +91,6 @@ async def leave(interaction: discord.Interaction):
     if interaction.guild.voice_client:
         await interaction.guild.voice_client.disconnect()
         bot.song_queue.clear()  # Clear the queue on leave
-        bot.activity_check_task = None  # Clear the task
         await interaction.response.send_message("Disconnected from the voice channel.")
     else:
         await interaction.response.send_message("I'm not in a voice channel.")
@@ -108,6 +100,9 @@ async def play(interaction: discord.Interaction, url: str):
     # Check if the user is in a voice channel
     if not interaction.user.voice:
         return await interaction.response.send_message("You need to be in a voice channel to play music.")
+
+    # Acknowledge the interaction immediately
+    await interaction.response.defer(thinking=True)
 
     # Get the current voice client
     voice_client = interaction.guild.voice_client
@@ -119,7 +114,7 @@ async def play(interaction: discord.Interaction, url: str):
 
     # Add the song to the queue
     bot.song_queue.append(url)
-    await interaction.response.send_message(f'Added to queue: {url}')
+    await interaction.followup.send(f'Added to queue: {url}')
 
     # Play if not already playing
     if not voice_client.is_playing() and not voice_client.is_paused():
@@ -135,7 +130,6 @@ async def play_next(voice_client):
         print(f'Now playing: **{player.data["title"]}**')
     else:
         await voice_client.disconnect()  # Disconnect if the queue is empty
-
 
 @bot.tree.command(name="stop", description="Stop the music")
 async def stop(interaction: discord.Interaction):
