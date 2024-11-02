@@ -3,8 +3,6 @@ import random
 import os
 import youtube_dl
 from discord import app_commands
-from collections import deque
-import asyncio
 
 # Token
 TOKEN = os.getenv('TOKEN')
@@ -17,13 +15,12 @@ VIDEOS_FOLDER = os.path.join(os.path.dirname(__file__), 'videos')
 ytdl_format_options = {
     'format': 'bestaudio/best',
     'postprocessors': [{
-        'key': 'FFmpegExtractAudio',  
+        'key': 'FFmpegExtractAudio',  # Ensure you have FFmpeg installed
         'preferredcodec': 'mp3',
         'preferredquality': '192',
     }],
     'noplaylist': True,
 }
-
 
 ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
 
@@ -47,14 +44,7 @@ class MyBot(discord.Client):
         intents = discord.Intents.default()
         intents.message_content = True  # Enable the message content intent
         super().__init__(intents=intents)
-        self.song_queue = deque()  # Initialize a deque for the song queue
-        self.activity_check_task = None  # Task to check for inactivity
-
-    async def check_inactivity(self, voice_client):
-        await asyncio.sleep(600)  # Wait for 10 minutes (600 seconds)
-        if not voice_client.is_playing() and not self.song_queue:
-            await voice_client.disconnect()
-            print("Disconnected from voice channel due to inactivity.")
+        self.tree = app_commands.CommandTree(self)  # Initialize the command tree correctly
 
 # Initialize bot
 bot = MyBot()
