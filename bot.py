@@ -72,7 +72,7 @@ class MyBot(discord.Client):
 bot = MyBot()
 
 # Command: /zdjecie
-@bot.tree.command(name="zdjecie", description="Send a random image")
+@bot.tree.command(name="zdjecie", description="Wyślij śmieszne zdjęcie konrad")
 async def zdjecie(interaction: discord.Interaction):
     images = os.listdir(IMAGES_FOLDER)
     random_image = random.choice(images)
@@ -80,36 +80,27 @@ async def zdjecie(interaction: discord.Interaction):
         await interaction.response.send_message(file=discord.File(file))
 
 # Command: /filmik
-@bot.tree.command(name="filmik", description="Send a random video")
+@bot.tree.command(name="filmik", description="Wyślij śmieszny filmik konrad")
 async def filmik(interaction: discord.Interaction):
     videos = os.listdir(VIDEOS_FOLDER)
     random_video = random.choice(videos)
     with open(os.path.join(VIDEOS_FOLDER, random_video), 'rb') as file:
         await interaction.response.send_message(file=discord.File(file))
 
-@bot.tree.command(name="join", description="Join a voice channel")
-async def join(interaction: discord.Interaction):
-    if interaction.user.voice:
-        channel = interaction.user.voice.channel
-        await channel.connect()
-        await interaction.response.send_message(f"Joined {channel}")
-    else:
-        await interaction.response.send_message("You need to be in a voice channel to use this command.")
-
-@bot.tree.command(name="leave", description="Leave the voice channel")
-async def leave(interaction: discord.Interaction):
+@bot.tree.command(name="leave", description="Wypierdalaj z kanału")
+async def wyjazd(interaction: discord.Interaction):
     if interaction.guild.voice_client:
         await interaction.guild.voice_client.disconnect()
         bot.song_queue.clear()  # Clear the queue on leave
-        await interaction.response.send_message("Disconnected from the voice channel.")
+        await interaction.response.send_message("Już poszedłem.")
     else:
-        await interaction.response.send_message("I'm not in a voice channel.")
+        await interaction.response.send_message("Przecież nigdzie mnie nie ma, odpierdolisz się?.")
 
-@bot.tree.command(name="play", description="Play a song from a YouTube link")
-async def play(interaction: discord.Interaction, url: str):
+@bot.tree.command(name="play", description="Puść jakiegoś umca umca")
+async def Brzdęknij(interaction: discord.Interaction, url: str):
     # Check if the user is in a voice channel
     if not interaction.user.voice:
-        return await interaction.response.send_message("You need to be in a voice channel to play music.")
+        return await interaction.response.send_message("Musisz być na kanale głosowym, żeby puścić muzykę.")
 
     # Acknowledge the interaction immediately
     await interaction.response.defer(thinking=True)
@@ -124,7 +115,7 @@ async def play(interaction: discord.Interaction, url: str):
 
     # Add the song to the queue
     bot.song_queue.append(url)
-    await interaction.followup.send(f'Added to queue: {url}')
+    await interaction.followup.send(f'Dodano do kolejki: {url}')
 
     # If the bot is not playing, start playing immediately
     if not voice_client.is_playing() and not voice_client.is_paused():
