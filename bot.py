@@ -58,6 +58,16 @@ class MyBot(discord.Client):
         await self.tree.sync()  # Synchronize commands with Discord
         print("Commands synchronized!")
 
+    async def on_voice_state_update(self, member, before, after):
+        # Log voice state changes for debugging
+        print(f"Voice state updated for {member.name}: {before} -> {after}")
+
+    async def reconnect_voice(self, voice_client):
+        print("Attempting to reconnect to voice...")
+        await voice_client.disconnect()  # Ensure the client is disconnected first
+        await asyncio.sleep(5)  # Wait a moment before reconnecting
+        await voice_client.connect()  # Attempt to reconnect
+
 # Initialize bot
 bot = MyBot()
 
