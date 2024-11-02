@@ -2,6 +2,7 @@ import discord
 import random
 import os
 import youtube_dl
+from collections import deque
 from discord import app_commands
 
 # Token
@@ -45,16 +46,21 @@ class MyBot(discord.Client):
         intents.message_content = True  # Enable the message content intent
         super().__init__(intents=intents)
         self.tree = app_commands.CommandTree(self)  # Initialize the command tree correctly
+        self.song_queue = deque()  # Initialize the song queue
+        self.activity_check_task = None  # Task for checking inactivity
+
+    async def on_ready(self):
+        print(f'Logged in as {self.user}')
+        await self.tree.sync()  # Synchronize commands with Discord
+        print("Commands synchronized!")
+
+    async def check_inactivity(self, voice_client):
+        await asyncio.sleep(600)  # Wait for 10 minutes
+        if not voice_client.is_playing():
+            await voice_client.disconnect()
 
 # Initialize bot
 bot = MyBot()
-
-@bot.event
-async def on_ready():
-    print(f'Logged in as {bot.user}')
-    await bot.tree.sync()  # Synchronize commands with Discord
-    print("Commands synchronized!")
-
 
 # Command: /zdjecie
 @bot.tree.command(name="zdjecie", description="Send a random image")
@@ -83,8 +89,8 @@ async def join(interaction: discord.Interaction):
 
 @bot.tree.command(name="leave", description="Leave the voice channel")
 async def leave(interaction: discord.Interaction):
-    if interaction.voice_client:
-        await interaction.voice_client.disconnect()
+    if interaction.guild.voice_client:
+        await interaction.guild.voice_client.disconnect()
         bot.song_queue.clear()  # Clear the queue on leave
         await interaction.response.send_message("Disconnected from the voice channel.")
     else:
@@ -97,7 +103,8 @@ async def play(interaction: discord.Interaction, url: str):
         return await interaction.response.send_message("You need to be in a voice channel to play music.")
 
     # Check if the bot is already in a voice channel
-    if interaction.voice_client is None:
+    voice_client = interaction.guild.voice_client
+    if voice_client is None:
         channel = interaction.user.voice.channel
         await channel.connect()
 
@@ -106,12 +113,12 @@ async def play(interaction: discord.Interaction, url: str):
     await interaction.response.send_message(f'Added to queue: {url}')
 
     # Play if not already playing
-    if not interaction.voice_client.is_playing():
-        await play_next(interaction.voice_client)
+    if not voice_client.is_playing():
+        await play_next(voice_client)
 
     # Start the inactivity check if it's not already running
     if bot.activity_check_task is None:
-        bot.activity_check_task = bot.loop.create_task(bot.check_inactivity(interaction.voice_client))
+        bot.activity_check_task = bot.loop.create_task(bot.check_inactivity(voice_client))
 
 async def play_next(voice_client):
     if len(bot.song_queue) > 0:
@@ -124,32 +131,32 @@ async def play_next(voice_client):
 
 @bot.tree.command(name="stop", description="Stop the music")
 async def stop(interaction: discord.Interaction):
-    if interaction.voice_client and interaction.voice_client.is_playing():
-        interaction.voice_client.stop()
+    if interaction.guild.voice_client and interaction.guild.voice_client.is_playing():
+        interaction.guild.voice_client.stop()
         await interaction.response.send_message("Music stopped.")
     else:
         await interaction.response.send_message("No music is currently playing.")
 
 @bot.tree.command(name="pause", description="Pause the music")
 async def pause(interaction: discord.Interaction):
-    if interaction.voice_client and interaction.voice_client.is_playing():
-        interaction.voice_client.pause()
+    if interaction.guild.voice_client and interaction.guild.voice_client.is_playing():
+        interaction.guild.voice_client.pause()
         await interaction.response.send_message("Music paused.")
     else:
         await interaction.response.send_message("No music is currently playing.")
 
 @bot.tree.command(name="resume", description="Resume the music")
 async def resume(interaction: discord.Interaction):
-    if interaction.voice_client and interaction.voice_client.is_paused():
-        interaction.voice_client.resume()
+    if interaction.guild.voice_client and interaction.guild.voice_client.is_paused():
+        interaction.guild.voice_client.resume()
         await interaction.response.send_message("Music resumed.")
     else:
         await interaction.response.send_message("Music is not paused.")
 
 @bot.tree.command(name="skip", description="Skip the currently playing song")
 async def skip(interaction: discord.Interaction):
-    if interaction.voice_client and interaction.voice_client.is_playing():
-        interaction.voice_client.stop()
+    if interaction.guild.voice_client and interaction.guild.voice_client.is_playing():
+        interaction.guild.voice_client.stop()
         await interaction.response.send_message("Skipped the currently playing song.")
     else:
         await interaction.response.send_message("No music is currently playing.")
