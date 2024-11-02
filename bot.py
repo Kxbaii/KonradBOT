@@ -1,7 +1,7 @@
 import discord
 import random
 import os
-import youtube_dl
+import yt_dlp as youtube_dl
 from collections import deque
 from discord import app_commands
 
