@@ -5,6 +5,7 @@ import yt_dlp as youtube_dl
 import asyncio
 from collections import deque
 from discord import app_commands
+import re
 
 # Token
 TOKEN = os.getenv('TOKEN')
@@ -13,18 +14,25 @@ TOKEN = os.getenv('TOKEN')
 IMAGES_FOLDER = os.path.join(os.path.dirname(__file__), 'images')
 VIDEOS_FOLDER = os.path.join(os.path.dirname(__file__), 'videos')
 
-# Setup youtube_dl options
+# Setup youtube_dl options for search
 ytdl_format_options = {
     'format': 'bestaudio/best',
     'postprocessors': [{
-        'key': 'FFmpegExtractAudio',  # Ensure you have FFmpeg installed
+        'key': 'FFmpegExtractAudio',
         'preferredcodec': 'mp3',
         'preferredquality': '192',
     }],
     'noplaylist': True,
+    'default_search': 'ytsearch',  # Enables search functionality for song names
+    'quiet': True,  # Suppress verbose output
 }
 
 ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
+
+# Regular expression to check if a string is a URL
+URL_REGEX = re.compile(
+    r'^(https?://)?(www\.)?(youtube|youtu|youtube-nocookie)\.(com|be)/.+$'
+)
 
 class YTDLSource(discord.PCMVolumeTransformer):
     def __init__(self, source, *, data, volume=0.5):
@@ -32,17 +40,21 @@ class YTDLSource(discord.PCMVolumeTransformer):
         self.data = data
 
     @classmethod
-    async def from_url(cls, url, *, loop=None, volume=0.5):
-        try:
-            data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=False))
-            if 'entries' in data:
-                data = data['entries'][0]
-            filename = data['url']
-            source = discord.FFmpegPCMAudio(filename)
-            return cls(source, data=data, volume=volume)
-        except Exception as e:
-            print(f"Error extracting info: {e}")
-            return None
+    async def from_query(cls, query, *, loop=None, volume=0.5):
+        """Handles both URLs and search queries."""
+        loop = loop or asyncio.get_event_loop()
+        
+        # Determine if query is a URL
+        is_url = URL_REGEX.match(query)
+        
+        # Extract info based on URL or search
+        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(query, download=False))
+        if 'entries' in data:  # For search queries, take the first result
+            data = data['entries'][0]
+        
+        filename = data['url']
+        source = discord.FFmpegPCMAudio(filename)
+        return cls(source, data=data, volume=volume)
 
 # Bot class
 class MyBot(discord.Client):
@@ -58,17 +70,7 @@ class MyBot(discord.Client):
         await self.tree.sync()  # Synchronize commands with Discord
         print("Commands synchronized!")
 
-    async def on_voice_state_update(self, member, before, after):
-        # Log voice state changes for debugging
-        print(f"Voice state updated for {member.name}: {before} -> {after}")
-
-    async def reconnect_voice(self, voice_client):
-        print("Attempting to reconnect to voice...")
-        await voice_client.disconnect()  # Ensure the client is disconnected first
-        await asyncio.sleep(5)  # Wait a moment before reconnecting
-        await voice_client.connect()  # Attempt to reconnect
-
-# Initialize bot
+    # Initialize bot
 bot = MyBot()
 
 # Command: /zdjecie
@@ -97,7 +99,7 @@ async def wyjazd(interaction: discord.Interaction):
         await interaction.response.send_message("Przecież nigdzie mnie nie ma, odpierdolisz się?.")
 
 @bot.tree.command(name="play", description="Puść jakiegoś umca umca")
-async def Brzdęknij(interaction: discord.Interaction, url: str):
+async def Brzdęknij(interaction: discord.Interaction, query: str):
     # Check if the user is in a voice channel
     if not interaction.user.voice:
         return await interaction.response.send_message("Musisz być na kanale głosowym, żeby puścić muzykę.")
@@ -114,20 +116,19 @@ async def Brzdęknij(interaction: discord.Interaction, url: str):
         voice_client = await channel.connect()
 
     # Add the song to the queue
-    bot.song_queue.append(url)
-    await interaction.followup.send(f'Dodano do kolejki: {url}')
+    bot.song_queue.append(query)
+    await interaction.followup.send(f'Dodano do kolejki: {query}')
 
     # If the bot is not playing, start playing immediately
     if not voice_client.is_playing() and not voice_client.is_paused():
         await play_next(voice_client)
 
-
 async def play_next(voice_client):
     if len(bot.song_queue) > 0:
-        url = bot.song_queue.popleft()  # Get the next song from the queue
-        player = await YTDLSource.from_url(url, loop=bot.loop)
+        query = bot.song_queue.popleft()  # Get the next song from the queue
+        player = await YTDLSource.from_query(query, loop=bot.loop)  # Use from_query for both URLs and names
         
-        # Use play() method to start playback immediately
+        # Play the audio
         voice_client.play(player, after=lambda e: bot.loop.create_task(play_next(voice_client)))
         print(f'Now playing: **{player.data["title"]}**')
     else:
