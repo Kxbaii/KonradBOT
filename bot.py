@@ -64,13 +64,15 @@ class MyBot(discord.Client):
         super().__init__(intents=intents)
         self.tree = app_commands.CommandTree(self)  # Initialize the command tree correctly
         self.song_queue = deque()  # Initialize the song queue
+        self.loop_song = False  # Add a loop flag
+        self.current_song = None  # Track the currently playing song
 
     async def on_ready(self):
         print(f'Logged in as {self.user}')
         await self.tree.sync()  # Synchronize commands with Discord
         print("Commands synchronized!")
 
-    # Initialize bot
+# Initialize bot
 bot = MyBot()
 
 # Command: /zdjecie
@@ -94,6 +96,7 @@ async def wyjazd(interaction: discord.Interaction):
     if interaction.guild.voice_client:
         await interaction.guild.voice_client.disconnect()
         bot.song_queue.clear()  # Clear the queue on leave
+        bot.loop_song = False  # Turn off looping when leaving
         await interaction.response.send_message("Już poszedłem.")
     else:
         await interaction.response.send_message("Przecież nigdzie mnie nie ma, odpierdolisz się?.")
@@ -124,15 +127,20 @@ async def Brzdęknij(interaction: discord.Interaction, query: str):
         await play_next(voice_client)
 
 async def play_next(voice_client):
-    if len(bot.song_queue) > 0:
-        query = bot.song_queue.popleft()  # Get the next song from the queue
-        player = await YTDLSource.from_query(query, loop=bot.loop)  # Use from_query for both URLs and names
-        
-        # Play the audio
-        voice_client.play(player, after=lambda e: bot.loop.create_task(play_next(voice_client)))
-        print(f'Now playing: **{player.data["title"]}**')
+    if bot.loop_song and bot.current_song:
+        player = await YTDLSource.from_query(bot.current_song, loop=bot.loop)
+    elif len(bot.song_queue) > 0:
+        bot.current_song = bot.song_queue.popleft()  # Get the next song from the queue
+        player = await YTDLSource.from_query(bot.current_song, loop=bot.loop)
     else:
+        bot.current_song = None  # Clear the current song if no songs are left
+        bot.loop_song = False  # Disable loop if there are no more songs
         await voice_client.disconnect()  # Disconnect if the queue is empty
+        return
+
+    # Play the audio
+    voice_client.play(player, after=lambda e: bot.loop.create_task(play_next(voice_client)))
+    print(f'Now playing: **{player.data["title"]}**')
 
 @bot.tree.command(name="stop", description="Stop the music")
 async def stop(interaction: discord.Interaction):
@@ -173,6 +181,12 @@ async def queue(interaction: discord.Interaction):
         await interaction.response.send_message(f"Current queue:\n{queue_list}")
     else:
         await interaction.response.send_message("The queue is currently empty.")
+
+@bot.tree.command(name="loop", description="Toggle looping for the current song")
+async def loop(interaction: discord.Interaction):
+    bot.loop_song = not bot.loop_song  # Toggle loop mode
+    status = "enabled" if bot.loop_song else "disabled"
+    await interaction.response.send_message(f"Looping is now {status}.")
 
 # Run bot
 bot.run(TOKEN)
