@@ -48,20 +48,18 @@ class YTDLSource(discord.PCMVolumeTransformer):
     async def from_query(cls, query, *, loop=None, volume=0.5):
         loop = loop or asyncio.get_event_loop()
 
-        # Determine if query is a URL
-        is_url = URL_REGEX.match(query)
-
-        data = None  # Initialize data to avoid UnboundLocalError
+        # Initialize data to avoid UnboundLocalError
+        data = None
 
         try:
             # Extract info based on URL or search
             data = await loop.run_in_executor(None, lambda: ytdl.extract_info(query, download=False))
         except youtube_dl.utils.DownloadError as e:
             print(f"Error extracting info for {query}: {e}")
-            # If extraction fails, return None
-            return None
+            return None  # Return None on error
 
-        if 'entries' in data:  # For search queries, take the first result
+        # Handle case where there are multiple video entries (search results)
+        if 'entries' in data:
             data = data['entries'][0]
 
         # Check if formats are available
@@ -69,22 +67,32 @@ class YTDLSource(discord.PCMVolumeTransformer):
             available_formats = data['formats']
             best_format = None
 
-            # Try to pick the best available format
+            # Try to pick the best available audio format
             for fmt in available_formats:
-                if fmt.get('ext') == 'mp3':  # Preferred format
+                if fmt.get('ext') == 'mp3' and fmt.get('acodec') != 'none':  # Prefer MP3 with audio codec
                     best_format = fmt
                     break
 
+            # If MP3 isn't available, try a fallback format (audio-only)
             if not best_format:
-                best_format = available_formats[0]  # Fallback to the first available format
+                for fmt in available_formats:
+                    if fmt.get('vcodec') == 'none' and fmt.get('acodec') != 'none':  # Audio-only formats
+                        best_format = fmt
+                        break
+
+            if not best_format:
+                print(f"No suitable audio format found for {query}. Skipping...")
+                return None  # Return None if no audio formats found
 
             filename = best_format['url']
         else:
-            print("No formats available for the requested video.")
+            print(f"No formats available for {query}. Skipping...")
             return None  # Return None if no formats are available
 
+        # Return the audio source
         source = discord.FFmpegPCMAudio(filename)
         return cls(source, data=data, volume=volume)
+
 
 
 # Bot class
