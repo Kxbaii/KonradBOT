@@ -51,18 +51,15 @@ class YTDLSource(discord.PCMVolumeTransformer):
         # Determine if query is a URL
         is_url = URL_REGEX.match(query)
 
+        data = None  # Initialize data to avoid UnboundLocalError
+
         try:
             # Extract info based on URL or search
             data = await loop.run_in_executor(None, lambda: ytdl.extract_info(query, download=False))
         except youtube_dl.utils.DownloadError as e:
             print(f"Error extracting info for {query}: {e}")
-            # If extraction fails, list available formats
-            if 'formats' in data:
-                available_formats = data['formats']
-                print("Available formats:")
-                for fmt in available_formats:
-                    print(fmt)
-            return None  # Return None if extraction fails
+            # If extraction fails, return None
+            return None
 
         if 'entries' in data:  # For search queries, take the first result
             data = data['entries'][0]
@@ -84,10 +81,11 @@ class YTDLSource(discord.PCMVolumeTransformer):
             filename = best_format['url']
         else:
             print("No formats available for the requested video.")
-            return None
+            return None  # Return None if no formats are available
 
         source = discord.FFmpegPCMAudio(filename)
         return cls(source, data=data, volume=volume)
+
 
 # Bot class
 class MyBot(discord.Client):
