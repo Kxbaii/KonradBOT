@@ -56,7 +56,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
         try:
             # Extract info based on URL or search
             data = await loop.run_in_executor(None, lambda: ytdl.extract_info(query, download=False))
-        except yt_dlp.utils.DownloadError as e:
+        except youtube_dl.utils.DownloadError as e:
             print(f"Error extracting info for {query}: {e}")
             return None  # Return None if extraction fails
         
@@ -160,6 +160,10 @@ async def play_next(voice_client):
         query = bot.song_queue.popleft()  # Get the next song from the queue
         player = await YTDLSource.from_query(query, loop=bot.loop)  # Use from_query for both URLs and names
         
+        if player is None:  # Skip if no player could be created
+            print(f"Skipping song: {query}")
+            return await play_next(voice_client)
+
         # Play the audio
         voice_client.play(player, after=lambda e: bot.loop.create_task(play_next(voice_client)))
         print(f'Now playing: **{player.data["title"]}**')
@@ -214,16 +218,9 @@ async def skip(interaction: discord.Interaction):
 @bot.tree.command(name="queue", description="Show the current music queue")
 async def queue(interaction: discord.Interaction):
     if bot.song_queue:
-        queue_list = "\n".join(bot.song_queue)
-        await interaction.response.send_message(f"Current queue:\n{queue_list}")
+        await interaction.response.send_message(f"Current queue: {', '.join(bot.song_queue)}")
     else:
-        await interaction.response.send_message("The queue is currently empty.")
+        await interaction.response.send_message("The queue is empty.")
 
-@bot.tree.command(name="loop", description="Toggle looping for the current song")
-async def loop(interaction: discord.Interaction):
-    bot.loop_song = not bot.loop_song  # Toggle loop mode
-    status = "enabled" if bot.loop_song else "disabled"
-    await interaction.response.send_message(f"Looping is now {status}.")
-
-# Run bot
+# Run the bot
 bot.run(TOKEN)
