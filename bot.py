@@ -14,12 +14,7 @@ TOKEN = os.getenv('TOKEN')
 IMAGES_FOLDER = os.path.join(os.path.dirname(__file__), 'images')
 VIDEOS_FOLDER = os.path.join(os.path.dirname(__file__), 'videos')
 
-# Check if cookies.txt exists
-COOKIES_FILE = 'cookies.txt'
-if not os.path.exists(COOKIES_FILE):
-    print("⚠️ Warning: cookies.txt not found! Some videos may not play if they require authentication.")
-
-# Setup yt-dlp options for search
+# Setup youtube_dl options for search
 ytdl_format_options = {
     'format': 'bestaudio/best',
     'postprocessors': [{
@@ -30,8 +25,12 @@ ytdl_format_options = {
     'noplaylist': True,
     'default_search': 'ytsearch',  # Enables search functionality for song names
     'quiet': True,  # Suppress verbose output
-    'cookiefile': COOKIES_FILE,  # Use authenticated cookies
+    'cookiefile': 'cookies.txt',  # Use authenticated cookies
 }
+
+# Check if cookies.txt exists
+if not os.path.exists("cookies.txt"):
+    print("⚠️ Warning: cookies.txt not found! Some videos may not play.")
 
 ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
 
@@ -47,7 +46,6 @@ class YTDLSource(discord.PCMVolumeTransformer):
 
     @classmethod
     async def from_query(cls, query, *, loop=None, volume=0.5):
-        """Handles both URLs and search queries."""
         loop = loop or asyncio.get_event_loop()
 
         # Determine if query is a URL
@@ -58,8 +56,14 @@ class YTDLSource(discord.PCMVolumeTransformer):
             data = await loop.run_in_executor(None, lambda: ytdl.extract_info(query, download=False))
         except youtube_dl.utils.DownloadError as e:
             print(f"Error extracting info for {query}: {e}")
+            # If extraction fails, list available formats
+            if 'formats' in data:
+                available_formats = data['formats']
+                print("Available formats:")
+                for fmt in available_formats:
+                    print(fmt)
             return None  # Return None if extraction fails
-        
+
         if 'entries' in data:  # For search queries, take the first result
             data = data['entries'][0]
 
@@ -129,7 +133,7 @@ async def wyjazd(interaction: discord.Interaction):
         await interaction.response.send_message("Już poszedłem.")
     else:
         await interaction.response.send_message("Przecież nigdzie mnie nie ma, odpierdolisz się?.")
-
+ 
 @bot.tree.command(name="play", description="Puść jakiegoś umca umca")
 async def Brzdęknij(interaction: discord.Interaction, query: str):
     # Check if the user is in a voice channel
@@ -160,28 +164,14 @@ async def play_next(voice_client):
         query = bot.song_queue.popleft()  # Get the next song from the queue
         player = await YTDLSource.from_query(query, loop=bot.loop)  # Use from_query for both URLs and names
         
-        if player is None:  # Skip if no player could be created
-            print(f"Skipping song: {query}")
-            return await play_next(voice_client)
+        if player is None:
+            # If the player could not be created, skip the song
+            await play_next(voice_client)
+            return
 
         # Play the audio
         voice_client.play(player, after=lambda e: bot.loop.create_task(play_next(voice_client)))
         print(f'Now playing: **{player.data["title"]}**')
-
-    if bot.loop_song and bot.current_song:
-        player = await YTDLSource.from_query(bot.current_song, loop=bot.loop)
-    elif len(bot.song_queue) > 0:
-        bot.current_song = bot.song_queue.popleft()  # Get the next song from the queue
-        player = await YTDLSource.from_query(bot.current_song, loop=bot.loop)
-    else:
-        bot.current_song = None  # Clear the current song if no songs are left
-        bot.loop_song = False  # Disable loop if there are no more songs
-        await voice_client.disconnect()  # Disconnect if the queue is empty
-        return
-
-    # Play the audio
-    voice_client.play(player, after=lambda e: bot.loop.create_task(play_next(voice_client)))
-    print(f'Now playing: **{player.data["title"]}**')
 
 @bot.tree.command(name="stop", description="Stop the music")
 async def stop(interaction: discord.Interaction):
@@ -218,9 +208,16 @@ async def skip(interaction: discord.Interaction):
 @bot.tree.command(name="queue", description="Show the current music queue")
 async def queue(interaction: discord.Interaction):
     if bot.song_queue:
-        await interaction.response.send_message(f"Current queue: {', '.join(bot.song_queue)}")
+        queue_list = "\n".join(bot.song_queue)
+        await interaction.response.send_message(f"Current queue:\n{queue_list}")
     else:
-        await interaction.response.send_message("The queue is empty.")
+        await interaction.response.send_message("The queue is currently empty.")
 
-# Run the bot
+@bot.tree.command(name="loop", description="Toggle looping for the current song")
+async def loop(interaction: discord.Interaction):
+    bot.loop_song = not bot.loop_song  # Toggle loop mode
+    status = "enabled" if bot.loop_song else "disabled"
+    await interaction.response.send_message(f"Looping is now {status}.")
+
+# Run bot
 bot.run(TOKEN)
